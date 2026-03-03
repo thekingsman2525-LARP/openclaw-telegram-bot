@@ -174,28 +174,13 @@ async def telegram_webhook(request: Request):
                                 "reviewer_name": username
                             }).execute()
                             mark_as_rated(target_queue_id)
+                            tg_request("sendMessage", {"chat_id": chat_id, "text": "✅ Custom Typed Text Saved!"})
                             send_next_swipe(chat_id, is_test=False)
                     else:
                         tg_request("sendMessage", {"chat_id": chat_id, "text": f"✅ TEST MODE: Critique '{text}' would have been saved!"})
                         send_next_swipe(chat_id, is_test=True)
                 except Exception as e:
-                    pass
-                    
-                    if not is_test_mode:
-                        if supabase:
-                            supabase.table("training_data").insert({
-                                "file_id": target_file_id,
-                                "media_type": "unknown",
-                                "status": "CRITIQUED",
-                                "flaw_tags": [],
-                                "user_notes": text,
-                                "reviewer_name": username
-                            }).execute()
-                        tg_request("sendMessage", {"chat_id": chat_id, "text": "✅ Custom Typed Text Saved!"})
-                    else:
-                        tg_request("sendMessage", {"chat_id": chat_id, "text": f"✅ TEST MODE: Critique '{text}' would have been saved!"})
-                except Exception as e:
-                    pass
+                    print(f"Error parsing text critique: {e}")
 
     # Unified Media Ingestion (Catch both DMs and Channel Posts)
     msg_obj = update.get("message") or update.get("channel_post")
@@ -334,45 +319,6 @@ async def telegram_webhook(request: Request):
             tg_request("sendMessage", {
                 "chat_id": chat_id,
                 "text": f"Type your critique for Media ID: {queue_id}{test_str}\n(Reply directly to this message)",
-                "reply_markup": {"force_reply": True}
-            })
-            
-            if flag_name in ACTIVE_SESSIONS[file_id]:
-                ACTIVE_SESSIONS[file_id].remove(flag_name)
-            else:
-                ACTIVE_SESSIONS[file_id].append(flag_name)
-                
-            tg_request("sendMessage", {"chat_id": chat_id, "text": f"Flag toggled: {flag_name}"})
-
-        elif action == "submit_flaws":
-            media_type, file_id = parts[1], parts[2]
-            flags = ACTIVE_SESSIONS.get(file_id, [])
-            
-            if not is_test:
-                if supabase:
-                    supabase.table("training_data").insert({
-                        "file_id": file_id,
-                        "media_type": media_type,
-                        "status": "SLOP",
-                        "flaw_tags": flags,
-                        "reviewer_name": username
-                    }).execute()
-                mark_as_rated(file_id)
-                msg_txt = f"✅ Submitted flaws: {flags}. Loading next..."
-            else:
-                msg_txt = f"✅ TEST MODE: Flaws {flags} would have been saved! Loading next..."
-            
-            tg_request("editMessageReplyMarkup", {"chat_id": chat_id, "message_id": msg_id, "reply_markup": {"inline_keyboard": []}})
-            tg_request("sendMessage", {"chat_id": chat_id, "text": msg_txt})
-            if file_id in ACTIVE_SESSIONS: del ACTIVE_SESSIONS[file_id]
-            send_next_swipe(chat_id, is_test)
-
-        elif action == "typenote":
-            file_id = parts[1]
-            test_str = " (TEST MODE)" if is_test else ""
-            tg_request("sendMessage", {
-                "chat_id": chat_id,
-                "text": f"Type your critique for file_id: {file_id}{test_str}\n(Reply directly to this message)",
                 "reply_markup": {"force_reply": True}
             })
 
