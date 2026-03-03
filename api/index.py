@@ -112,6 +112,31 @@ async def telegram_webhook(request: Request):
                 except Exception as e:
                     pass
 
+    elif "channel_post" in update:
+        msg = update["channel_post"]
+        file_id = None
+        media_type = None
+        
+        if "photo" in msg:
+            file_id = msg["photo"][-1]["file_id"]
+            media_type = "image"
+        elif "video" in msg:
+            if isinstance(msg["video"], dict):
+                file_id = msg["video"]["file_id"]
+            else:
+                file_id = msg["video"][-1]["file_id"]
+            media_type = "video"
+            
+        if file_id and supabase:
+            try:
+                supabase.table("media_queue").insert({
+                    "file_id": file_id,
+                    "media_type": media_type,
+                    "is_rated": False
+                }).execute()
+            except Exception:
+                pass
+
     elif "callback_query" in update:
         call = update["callback_query"]
         chat_id = call["message"]["chat"]["id"]
