@@ -23,32 +23,43 @@ def tg_request(method: str, payload: dict):
     if "reply_markup" in payload and isinstance(payload["reply_markup"], dict):
         payload["reply_markup"] = json.dumps(payload["reply_markup"])
     try:
-        httpx.post(url, json=payload, timeout=10.0)
+        resp = httpx.post(url, json=payload, timeout=10.0)
+        if resp.status_code != 200:
+            print(f"Telegram API Error [{resp.status_code}]: {resp.text}")
     except Exception as e:
-        print(f"Telegram API Error: {e}")
+        print(f"Telegram Web HTTP Error: {e}")
 
 # KEYBOARD MENUS
-def get_level_1_menu(file_id: str, media_type: str, is_test: bool = False):
+def get_main_keyboard():
+    return {
+        "keyboard": [
+            [{"text": "/swipe"}, {"text": "/testswipe"}],
+            [{"text": "/status"}, {"text": "/gallery"}]
+        ],
+        "resize_keyboard": True,
+        "one_time_keyboard": False
+    }
+def get_level_1_menu(queue_id: str, is_test: bool = False):
     t = "|test" if is_test else ""
     return {"inline_keyboard": [[
-        {"text": "🌟 FLAWLESS", "callback_data": f"golden|{media_type}|{file_id}{t}"},
-        {"text": "🔴 FLAWED", "callback_data": f"flawed|{media_type}|{file_id}{t}"}
+        {"text": "🌟 FLAWLESS", "callback_data": f"golden|{queue_id}{t}"},
+        {"text": "🔴 FLAWED", "callback_data": f"flawed|{queue_id}{t}"}
     ]]}
 
-def get_level_2_image_menu(file_id: str, is_test: bool = False):
+def get_level_2_image_menu(queue_id: str, is_test: bool = False):
     t = "|test" if is_test else ""
     return {"inline_keyboard": [
-        [{"text": "✋ Anatomy", "callback_data": f"flag|anatomy|{file_id}{t}"}, {"text": "🧴 Texture/Skin", "callback_data": f"flag|texture|{file_id}{t}"}],
-        [{"text": "👗 Outfit/Context", "callback_data": f"flag|context|{file_id}{t}"}, {"text": "👤 Lost Persona", "callback_data": f"flag|persona|{file_id}{t}"}],
-        [{"text": "✅ SUBMIT FLAGS", "callback_data": f"submit_flaws|image|{file_id}{t}"}, {"text": "✏️ TYPE NOTE", "callback_data": f"typenote|{file_id}{t}"}]
+        [{"text": "✋ Anatomy", "callback_data": f"flag|anatomy|{queue_id}{t}"}, {"text": "🧴 Texture/Skin", "callback_data": f"flag|texture|{queue_id}{t}"}],
+        [{"text": "👗 Outfit/Context", "callback_data": f"flag|context|{queue_id}{t}"}, {"text": "👤 Lost Persona", "callback_data": f"flag|persona|{queue_id}{t}"}],
+        [{"text": "✅ SUBMIT FLAGS", "callback_data": f"submit_flaws|{queue_id}{t}"}, {"text": "✏️ TYPE NOTE", "callback_data": f"typenote|{queue_id}{t}"}]
     ]}
 
-def get_level_2_video_menu(file_id: str, is_test: bool = False):
+def get_level_2_video_menu(queue_id: str, is_test: bool = False):
     t = "|test" if is_test else ""
     return {"inline_keyboard": [
-        [{"text": "⏱️ Flickering", "callback_data": f"flag|flicker|{file_id}{t}"}, {"text": "🧟 Melting", "callback_data": f"flag|melting|{file_id}{t}"}],
-        [{"text": "🚶 Bad Physics", "callback_data": f"flag|physics|{file_id}{t}"}, {"text": "👤 Lost Persona", "callback_data": f"flag|persona|{file_id}{t}"}],
-        [{"text": "✅ SUBMIT FLAGS", "callback_data": f"submit_flaws|video|{file_id}{t}"}, {"text": "✏️ TYPE NOTE", "callback_data": f"typenote|{file_id}{t}"}]
+        [{"text": "⏱️ Flickering", "callback_data": f"flag|flicker|{queue_id}{t}"}, {"text": "🧟 Melting", "callback_data": f"flag|melting|{queue_id}{t}"}],
+        [{"text": "🚶 Bad Physics", "callback_data": f"flag|physics|{queue_id}{t}"}, {"text": "👤 Lost Persona", "callback_data": f"flag|persona|{queue_id}{t}"}],
+        [{"text": "✅ SUBMIT FLAGS", "callback_data": f"submit_flaws|{queue_id}{t}"}, {"text": "✏️ TYPE NOTE", "callback_data": f"typenote|{queue_id}{t}"}]
     ]}
 
 ACTIVE_SESSIONS = {}
@@ -63,19 +74,20 @@ def send_next_swipe(chat_id, is_test=False):
         return
     
     media = data[0]
+    queue_id = str(media["id"])
     file_id = media["file_id"]
     media_type = media["media_type"]
     
-    caption_prefix = "🧪 [TEST MODE] " if is_test else ""
+    caption_prefix = "🧪 [TEST MODE]\n" if is_test else ""
     
     if media_type == "image":
-        tg_request("sendPhoto", {"chat_id": chat_id, "photo": file_id, "caption": f"{caption_prefix}Rate this Image:", "reply_markup": get_level_1_menu(file_id, "image", is_test)})
+        tg_request("sendPhoto", {"chat_id": chat_id, "photo": file_id, "caption": f"{caption_prefix}Rate this Image:", "reply_markup": get_level_1_menu(queue_id, is_test)})
     else:
-        tg_request("sendVideo", {"chat_id": chat_id, "video": file_id, "caption": f"{caption_prefix}Rate this Video:", "reply_markup": get_level_1_menu(file_id, "video", is_test)})
+        tg_request("sendVideo", {"chat_id": chat_id, "video": file_id, "caption": f"{caption_prefix}Rate this Video:", "reply_markup": get_level_1_menu(queue_id, is_test)})
 
-def mark_as_rated(file_id: str):
+def mark_as_rated(queue_id: str):
     if supabase:
-        supabase.table("media_queue").update({"is_rated": True}).eq("file_id", file_id).execute()
+        supabase.table("media_queue").update({"is_rated": True}).eq("id", queue_id).execute()
 
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
@@ -86,6 +98,14 @@ async def telegram_webhook(request: Request):
         chat_id = msg["chat"]["id"]
         username = msg.get("from", {}).get("username", "Unknown")
         text = msg.get("text", "")
+
+        if text.startswith("/start"):
+            tg_request("sendMessage", {
+                "chat_id": chat_id, 
+                "text": "Welcome to OpenClaw! Use the buttons below to begin.", 
+                "reply_markup": get_main_keyboard()
+            })
+            return {"status": "ok"}
 
         if text.startswith("/status"):
             if supabase:
@@ -138,7 +158,26 @@ async def telegram_webhook(request: Request):
             if "Type your critique" in reply_text:
                 try:
                     is_test_mode = "TEST MODE" in reply_text
-                    target_file_id = reply_text.split("file_id: ")[1].split("\n")[0].replace(" (TEST MODE)", "").strip()
+                    target_queue_id = reply_text.split("ID: ")[1].split("\n")[0].replace(" (TEST MODE)", "").strip()
+                    
+                    if not is_test_mode:
+                        if supabase:
+                            queue_item = supabase.table("media_queue").select("*").eq("id", target_queue_id).execute().data[0]
+                            supabase.table("training_data").insert({
+                                "file_id": queue_item["file_id"],
+                                "media_type": queue_item["media_type"],
+                                "status": "CRITIQUED",
+                                "flaw_tags": [],
+                                "user_notes": text,
+                                "reviewer_name": username
+                            }).execute()
+                            mark_as_rated(target_queue_id)
+                            send_next_swipe(chat_id, is_test=False)
+                    else:
+                        tg_request("sendMessage", {"chat_id": chat_id, "text": f"✅ TEST MODE: Critique '{text}' would have been saved!"})
+                        send_next_swipe(chat_id, is_test=True)
+                except Exception as e:
+                    pass
                     
                     if not is_test_mode:
                         if supabase:
@@ -218,11 +257,22 @@ async def telegram_webhook(request: Request):
             parts.pop()
 
         action = parts[0]
+        
+        # Determine the database queue reference
+        queue_id = parts[1] if action in ["golden", "flawed", "submit_flaws", "typenote"] else parts[2]
+        
+        media_type = "image"
+        file_id = ""
+        # We need the real file_id and media_type from Supabase to log correctly
+        if supabase:
+            queue_data = supabase.table("media_queue").select("*").eq("id", queue_id).execute().data
+            if queue_data:
+                media_type = queue_data[0]["media_type"]
+                file_id = queue_data[0]["file_id"]
 
         if action == "golden":
-            media_type, file_id = parts[1], parts[2]
             if not is_test:
-                if supabase:
+                if supabase and file_id:
                     supabase.table("training_data").insert({
                         "file_id": file_id,
                         "media_type": media_type,
@@ -230,7 +280,7 @@ async def telegram_webhook(request: Request):
                         "flaw_tags": [],
                         "reviewer_name": username
                     }).execute()
-                mark_as_rated(file_id)
+                mark_as_rated(queue_id)
                 msg_txt = "✅ Logged as Flawless. Loading next..."
             else:
                 msg_txt = "✅ TEST MODE: Flawless would have been saved. Loading next..."
@@ -240,14 +290,50 @@ async def telegram_webhook(request: Request):
             send_next_swipe(chat_id, is_test)
 
         elif action == "flawed":
-            media_type, file_id = parts[1], parts[2]
-            ACTIVE_SESSIONS[file_id] = []
-            menu = get_level_2_image_menu(file_id, is_test) if media_type == "image" else get_level_2_video_menu(file_id, is_test)
+            ACTIVE_SESSIONS[queue_id] = []
+            menu = get_level_2_image_menu(queue_id, is_test) if media_type == "image" else get_level_2_video_menu(queue_id, is_test)
             tg_request("editMessageReplyMarkup", {"chat_id": chat_id, "message_id": msg_id, "reply_markup": menu})
 
         elif action == "flag":
-            flag_name, file_id = parts[1], parts[2]
-            if file_id not in ACTIVE_SESSIONS: ACTIVE_SESSIONS[file_id] = []
+            flag_name = parts[1]
+            if queue_id not in ACTIVE_SESSIONS: ACTIVE_SESSIONS[queue_id] = []
+            
+            if flag_name in ACTIVE_SESSIONS[queue_id]:
+                ACTIVE_SESSIONS[queue_id].remove(flag_name)
+            else:
+                ACTIVE_SESSIONS[queue_id].append(flag_name)
+                
+            tg_request("sendMessage", {"chat_id": chat_id, "text": f"Flag toggled: {flag_name}"})
+
+        elif action == "submit_flaws":
+            flags = ACTIVE_SESSIONS.get(queue_id, [])
+            
+            if not is_test:
+                if supabase:
+                    supabase.table("training_data").insert({
+                        "file_id": file_id,
+                        "media_type": media_type,
+                        "status": "SLOP",
+                        "flaw_tags": flags,
+                        "reviewer_name": username
+                    }).execute()
+                mark_as_rated(queue_id)
+                msg_txt = f"✅ Submitted flaws: {flags}. Loading next..."
+            else:
+                msg_txt = f"✅ TEST MODE: Flaws {flags} would have been saved! Loading next..."
+            
+            tg_request("editMessageReplyMarkup", {"chat_id": chat_id, "message_id": msg_id, "reply_markup": {"inline_keyboard": []}})
+            tg_request("sendMessage", {"chat_id": chat_id, "text": msg_txt})
+            if queue_id in ACTIVE_SESSIONS: del ACTIVE_SESSIONS[queue_id]
+            send_next_swipe(chat_id, is_test)
+
+        elif action == "typenote":
+            test_str = " (TEST MODE)" if is_test else ""
+            tg_request("sendMessage", {
+                "chat_id": chat_id,
+                "text": f"Type your critique for Media ID: {queue_id}{test_str}\n(Reply directly to this message)",
+                "reply_markup": {"force_reply": True}
+            })
             
             if flag_name in ACTIVE_SESSIONS[file_id]:
                 ACTIVE_SESSIONS[file_id].remove(flag_name)
