@@ -156,30 +156,50 @@ async def telegram_webhook(request: Request):
                 except Exception as e:
                     pass
 
-    elif "channel_post" in update:
-        msg = update["channel_post"]
+    # Unified Media Ingestion (Catch both DMs and Channel Posts)
+    msg_obj = update.get("message") or update.get("channel_post")
+    if msg_obj:
+        chat_id = msg_obj["chat"]["id"]
+        text = msg_obj.get("text", "")
+        username = msg_obj.get("from", {}).get("username", "Unknown")
+        
+        # 1. Catch Media Uploads (Groups, DMs, Channels)
         file_id = None
         media_type = None
         
-        if "photo" in msg:
-            file_id = msg["photo"][-1]["file_id"]
+        if "photo" in msg_obj:
+            file_id = msg_obj["photo"][-1]["file_id"]
             media_type = "image"
-        elif "video" in msg:
-            if isinstance(msg["video"], dict):
-                file_id = msg["video"]["file_id"]
+        elif "video" in msg_obj:
+            if isinstance(msg_obj["video"], dict):
+                file_id = msg_obj["video"]["file_id"]
             else:
-                file_id = msg["video"][-1]["file_id"]
+                file_id = msg_obj["video"][-1]["file_id"]
             media_type = "video"
             
-        if file_id and supabase:
-            try:
-                supabase.table("media_queue").insert({
-                    "file_id": file_id,
-                    "media_type": media_type,
-                    "is_rated": False
-                }).execute()
-            except Exception:
-                pass
+        if file_id:
+            # Silently push to Queue
+            if supabase:
+                try:
+                    supabase.table("media_queue").insert({
+                        "file_id": file_id,
+                        "media_type": media_type,
+                        "is_rated": False
+                    }).execute()
+                except Exception:
+                    pass
+            
+            # If it was a direct DM to the bot (not a channel post), ask to rate it immediately
+            if "channel_post" not in update:
+                menu = get_level_1_menu(file_id, "image") if media_type == "image" else get_level_1_menu(file_id, "video")
+                tg_request("sendPhoto" if media_type == "image" else "sendVideo", {
+                    "chat_id": chat_id, 
+                    "photo": file_id} if media_type == "image" else {"chat_id": chat_id, "video": file_id, 
+                    "caption": "How is this manual upload?", 
+                    "reply_markup": menu
+                })
+            
+            return {"status": "ok"} # Stop processing further for pure media dumps
 
     elif "callback_query" in update:
         call = update["callback_query"]
