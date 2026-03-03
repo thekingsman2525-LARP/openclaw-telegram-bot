@@ -8,7 +8,7 @@ from supabase import create_client, Client
 app = FastAPI()
 
 # Configuration from Environment Variables (Vercel)
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "8775175120:AAFu9ErQmn1uwLA8O5b0zr2qANhC97Qhaxs")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://oftyjihmtjyradyiwhuh.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9mdHlqaWhtdGp5cmFkeWl3aHVoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1NDU5MzksImV4cCI6MjA4ODEyMTkzOX0.h88jM4Lm6SSGtlEqqKRmqvas4Tjs3HgSrWkPW1LLGc4")
 
