@@ -1,6 +1,7 @@
 import os
 import json
 import httpx
+import random
 from fastapi import FastAPI, Request
 from supabase import create_client, Client
 
@@ -39,6 +40,7 @@ def get_main_keyboard():
         "resize_keyboard": True,
         "one_time_keyboard": False
     }
+
 def get_level_1_menu(queue_id: str, is_test: bool = False):
     t = "|test" if is_test else ""
     return {"inline_keyboard": [[
@@ -67,13 +69,13 @@ ACTIVE_SESSIONS = {}
 def send_next_swipe(chat_id, is_test=False):
     """Fetches the next unrated media from Supabase Media Queue."""
     if not supabase: return
-    response = supabase.table("media_queue").select("*").eq("is_rated", False).limit(1).execute()
+    response = supabase.table("media_queue").select("*").eq("is_rated", False).limit(50).execute()
     data = response.data
     if not data:
         tg_request("sendMessage", {"chat_id": chat_id, "text": "🎉 The queue is empty! You have rated all available media."})
         return
     
-    media = data[0]
+    media = random.choice(data) if is_test else data[0]
     queue_id = str(media["id"])
     file_id = media["file_id"]
     media_type = media["media_type"]
