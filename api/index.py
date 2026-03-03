@@ -12,8 +12,10 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXV
 
 try:
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    SUPA_ERR = None
 except Exception as e:
     supabase = None
+    SUPA_ERR = str(e)
     print(f"Supabase connection failed: {e}")
 
 def tg_request(method: str, payload: dict):
@@ -91,7 +93,7 @@ async def telegram_webhook(request: Request):
                 rated = supabase.table("media_queue").select("id", count="exact").eq("is_rated", True).execute().count
                 msg_txt = f"📊 **Database Status**\n✅ Rated: {rated}\n⏳ Remaining: {unrated}"
             else:
-                msg_txt = "Supabase not connected."
+                msg_txt = f"Supabase not connected. Error: {SUPA_ERR}"
             tg_request("sendMessage", {"chat_id": chat_id, "text": msg_txt})
             return {"status": "ok"}
 
